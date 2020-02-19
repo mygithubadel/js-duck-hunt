@@ -1,0 +1,261 @@
+<!doctype html>
+
+<html>
+	<head>
+		<meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, minimum-scale=1.0">
+		<script
+			src="https://code.jquery.com/jquery-1.12.4.min.js"
+			integrity="sha256-ZosEbRLbNQzLpnKIkEdrPv7lOy9C27hHQ+Xp8a4MxAQ="
+			crossorigin="anonymous"></script>
+
+		<title>JS Duck Hunt</title>
+		<style>
+
+			*::-moz-selection { background: transparent; }
+			*::selection { background: transparent; }
+
+			body{
+				background-color: #64b0ff;
+				font-family: monospace;
+				color: white;
+				margin: 0;
+				padding: 0;
+				width:100vw;
+				height:100vh;
+				overflow: hidden;
+				position: fixed;
+				cursor: url('./crosshair.png') 35 35, auto;
+			}
+
+			game{
+				overflow: hidden;
+				width:100vw;
+				height:100vh;
+			}
+
+			field{
+				background-image: url(./1x-alpha.png);
+				image-rendering: pixelated;
+				width: 100%;
+				height: 700px;
+				background-size: 900px;
+				position: absolute;
+				bottom:0;
+				left:0;
+			}
+
+			foreground{
+				background-image: url(./1x-fg-alpha.png);
+				image-rendering: pixelated;
+				width: 100%;
+				height: 220px;
+				background-size: 900px;
+				position: absolute;
+				bottom:0;
+				left:0;
+				z-index: 999;
+			}
+
+			duck{
+				position: absolute;
+				height: 130px;
+				width: 130px;
+				left: 0;
+				top: 0;
+				background-color: transparent;
+				background-image: url(./ducks.png);
+				image-rendering: pixelated;
+				background-size: 366%; 
+				z-index: 1;
+			}
+
+			div.button{
+				z-index: 9999;
+				position: relative;
+				top:0;
+				background-color: black;
+				font-size: 20px;
+				padding: 2px 8px;
+				display: inline;
+				cursor: pointer;
+			}
+
+			div.button:hover{
+				background-color: white;
+				color:black;
+			}
+
+			div.score{font-size: 20px; background-color: black; display: inline; padding: 2px 8px;}
+
+			duck.falling{background-position: -170px -565px;}
+
+			duck._0_{background-position: 0 0;}
+			duck._1_{background-position: -141px 3px;}
+			duck._2_{background-position: -282px 13px;}
+
+			duck.flip{transform: scale(-1, 1);}
+
+			duck.shot{background-position: -32px -565px;}
+
+			duck.low._0_{background-position: 0 -140px;}
+			duck.low._1_{background-position: -150px -139px;}
+			duck.low._2_{background-position: -300px -137px;}
+		</style>
+	</head>
+	<body>
+		<game>
+			<field></field>
+			<foreground></foreground>
+			<div onselectstart="return false;" class="score">score : <span id="score">0</span></div>
+			<div class="button" onclick="new Duck">onboard a new duck !</div>
+			<div class="button" onclick="shootAll()">shoot all ducks !</div>
+		</game>
+		<script>
+
+			window.ducks = [];
+
+			function generateRandomNumber(min, max) {
+				const random = Math.floor(Math.random() * (+max - +min)) + +min;
+				return random;
+			}
+
+			class Duck {
+
+				constructor() {
+					this.edgeDeadZone = 130/2;
+					this.fallingAnimationInterval = 0;
+					this.flapWingsInterval = 0;
+
+					//create new duck element
+					$('game').append('<duck class="_0_"></duck>');
+
+					//identifier
+					this.duckElement = $('game duck:last');
+
+					window.ducks.push(this);
+
+					this.createNewDuck();
+				}
+
+
+				processAnimationStep(a, tween){
+					// should the duck look right or left
+					if (tween.prop === 'left') {
+						if(tween.start < tween.end) {
+							$(tween.elem).addClass('flip'); 
+						} else {
+							$(tween.elem).removeClass('flip'); 
+						}
+					}
+
+					// duck texture set ( duck is looking up or sideways )
+					if (tween.prop === 'top') {
+						if(Math.abs(tween.start - tween.end) < 150) {
+							$(tween.elem).addClass('low'); 
+						} else { 
+							$(tween.elem).removeClass('low'); 
+						}
+					}
+				}
+
+				flapWings() {
+					//swap through the 3 texture animation states
+					this.flapWingsInterval = setInterval(() => {
+						if(this.duckElement.attr('class').match(/\d/)) {
+							let currentAnimationState = this.duckElement.attr('class').match(/\d/)[0];
+							let previousAnimationState = currentAnimationState;
+							currentAnimationState++;
+							if(currentAnimationState > 2) currentAnimationState = 0;
+							this.duckElement.removeClass('_'+previousAnimationState+'_').addClass('_'+currentAnimationState+'_');
+						}
+					}, 90);
+				}
+
+				fly() {
+					return this.duckElement.animate({'left': generateRandomNumber(-1 * this.edgeDeadZone, window.innerWidth - this.edgeDeadZone), 'top': generateRandomNumber(-1 * this.edgeDeadZone, window.innerHeight - $('foreground').height())}, 
+						{
+							easing: 'linear', 
+							duration: generateRandomNumber(2000, 4000), 
+							complete: () => this.fly(this.duckElement),
+							step: this.processAnimationStep
+						}
+					);
+				}
+				
+				shot(){
+					// already shot, noop
+					if(this.duckElement.attr('dead')) return false; 
+					
+					//stop animation
+					this.duckElement.stop();
+					
+					//bring it behind
+					this.duckElement.css('z-index', 0);
+
+					//shot texture
+					this.duckElement.attr('dead', 'true').attr('class', 'shot');
+					
+					//incement score
+					$('#score').html(parseInt($('#score').html()) + 1);
+					
+					//falling animation
+					setTimeout(() => {
+						//falling texture
+						this.duckElement.attr('class','falling');
+						//falling rotation animation
+						this.fallingAnimationInterval = setInterval(()=>{
+							this.duckElement.toggleClass('flip');
+						}, 100);
+						//fall to the ground animation
+						this.duckElement.animate({top: parseInt($(this.duckElement).css('top')) + window.innerHeight }, 1000, 'linear', () => {
+							clearInterval(this.fallingAnimationInterval);
+							clearInterval(this.flapWingsInterval);
+
+							//remove element 
+							this.duckElement.remove();
+							//create a new duck to replace the dead one ! 
+							new Duck();						
+						});
+					},500);
+				}
+
+				createNewDuck() {
+					
+					// set random initial x and y for the new duck
+					this.duckElement.css('left', (generateRandomNumber(0,1000) > 500 ? window.innerWidth : - 130));
+					this.duckElement.css('top', generateRandomNumber(0,window.innerHeight - $('foreground').height()));
+					
+					// random flying animation
+					this.fly(this.duckElement);
+					
+					// flap wings animation
+					this.flapWings(this.duckElement);
+					
+					// shooting click duck handler
+					this.duckElement.mousedown(() => {
+						return this.shot(this.duckElement);
+					});
+
+					this.duckElement.on('touchstart',() => {
+						return this.shot(this.duckElement);
+					});
+				}
+			}
+
+
+			$(document).ready(function() {
+				for(i=0;i<4;i++) {new Duck();}
+			});
+
+			$(document).keydown(function(e) {
+				if(e.key === ' ') shootAll();
+			})
+
+			function shootAll() {
+				window.ducks.forEach(duck => duck.shot());
+			}
+
+		</script>
+	</body>
+</html>
+
