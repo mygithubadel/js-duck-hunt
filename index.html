@@ -241,19 +241,20 @@
 					});
 				}
 			}
-
+			
+			function shootAll() {
+				window.ducks.forEach(duck => duck.shot());
+			}
 
 			$(document).ready(function() {
+				// create 4 ducks on start
 				for(i=0;i<4;i++) {new Duck();}
 			});
 
 			$(document).keydown(function(e) {
+				// shoot all ducks on pressing space !
 				if(e.key === ' ') shootAll();
 			})
-
-			function shootAll() {
-				window.ducks.forEach(duck => duck.shot());
-			}
 
 		</script>
 	</body>
